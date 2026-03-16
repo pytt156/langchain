@@ -82,7 +82,7 @@ class _LoadingSpinner:
     def _animate(self):
         while self.running:
             frame = self.frames[self.frame_idx % len(self.frames)]
-            sys.stdout.write(f"\r{_C.CYAN}{frame} {self.message}{_C.RESET}")
+            sys.stdout.write(f"\r{_C.RED}{frame} {self.message}{_C.RESET}")
             sys.stdout.flush()
             self.frame_idx += 1
             time.sleep(0.1)
@@ -200,7 +200,7 @@ def _handle_stream_sync(
     final_text = ""
     first_chunk = True
 
-    spinner = _LoadingSpinner(f"Skickar till {agent_name or 'Agent'}...")
+    spinner = _LoadingSpinner(f"Sending to {agent_name or 'Agent'}...")
     spinner.start()
 
     for mode, data in chunks:
@@ -248,9 +248,7 @@ def _handle_stream_sync(
                     if streaming_reasoning:
                         print(_C.RESET)
                         streaming_reasoning = False
-                    _divider(
-                        f"| {agent_name or 'Agent'} | OUTPUT", _C.BLUE
-                    )
+                    _divider(f"| {agent_name or 'Agent'} | OUTPUT", _C.BLUE)
                     sys.stdout.write(f"  {_C.CYAN}")
                     streaming_text = True
                 sys.stdout.write(token.text)
@@ -304,7 +302,10 @@ def _handle_stream_sync(
                     # -- Tool response --
                     elif isinstance(msg, ToolMessage):
                         content = _msg_text(msg)
-                        _divider(f"| TOOL, {tc['name']} \u2192 {agent_name or 'Agent'}", _C.BLUE)
+                        _divider(
+                            f"| TOOL, {tc['name']} \u2192 {agent_name or 'Agent'}",
+                            _C.BLUE,
+                        )
                         _log_simple(f"{_C.GREEN}{content}{_C.RESET}")
 
         # ==============================================================
@@ -342,7 +343,7 @@ async def _handle_stream_async(
     final_text = ""
     first_chunk = True
 
-    spinner = _LoadingSpinner(f"Skickar till {agent_name or 'Agent'}...")
+    spinner = _LoadingSpinner(f"Sending to {agent_name or 'Agent'}...")
     spinner.start()
 
     async for mode, data in chunks:

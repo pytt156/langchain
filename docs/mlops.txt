@@ -1,0 +1,11 @@
+MLOps (Machine Learning Operations) is a set of practices for managing the lifecycle of machine learning models in production.
+
+Key components of MLOps include:
+- version control for data and models
+- automated training pipelines
+- continuous integration and deployment (CI/CD)
+- monitoring model performance after deployment
+
+A typical MLOps pipeline includes data ingestion, feature engineering, model training, evaluation, deployment, and monitoring.
+
+The goal of MLOps is to make machine learning systems reliable, reproducible, and maintainable in real-world production environments.

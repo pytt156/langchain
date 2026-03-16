@@ -1,0 +1,13 @@
+AI agents are systems that use language models to decide which actions to take in order to complete tasks.
+
+An agent typically has access to tools such as:
+- calculators
+- web requests
+- file readers
+- database queries
+
+The agent receives a user request, decides whether a tool is needed, calls the tool if necessary, and then uses the result to generate a response.
+
+Agents are often implemented using frameworks such as LangChain or LangGraph.
+
+The main benefit of agents is that they allow language models to interact with external systems instead of relying only on generated text.
