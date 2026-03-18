@@ -1,4 +1,3 @@
-import math
 import re
 from datetime import datetime, timezone
 from pathlib import Path
@@ -8,8 +7,6 @@ import requests
 from bs4 import BeautifulSoup
 from langchain.tools import tool
 from langchain_core.documents import Document
-from langchain_community.agent_toolkits.openapi.toolkit import RequestsToolkit
-from langchain_community.utilities.requests import TextRequestsWrapper
 from langchain_community.vectorstores import FAISS
 
 from util.tool_config import (
@@ -25,18 +22,16 @@ from util.tool_config import (
     EXCLUDED_DIR_NAMES,
     EXCLUDED_FILE_NAMES,
 )
-
 from util.embeddings import get_embeddings
 from util.tool_schema import (
-    CalculateInput,
     FetchSummarizeAndSaveInput,
     IndexProjectInput,
     ListFilesInput,
     ReadFileInput,
-    ReplaceTextInput,
     SearchCodebaseInput,
     SearchDocumentsInput,
     WriteFileInput,
+    FindFilesInput,
 )
 
 _docs_vectorstore = None
@@ -56,6 +51,51 @@ def _resolve_project_root(root_dir: str | None) -> Path:
     if root_dir is None:
         return DEFAULT_PROJECT_ROOT
     return Path(root_dir).expanduser().resolve()
+
+
+def _resolve_safe_project_path(file_path: str | Path) -> Path:
+    """
+    Resolve a path and ensure it stays within DEFAULT_PROJECT_ROOT.
+    Allows relative paths and absolute paths under the project root only.
+    """
+    candidate = Path(file_path).expanduser()
+
+    if not candidate.is_absolute():
+        candidate = (DEFAULT_PROJECT_ROOT / candidate).resolve()
+    else:
+        candidate = candidate.resolve()
+
+    try:
+        candidate.relative_to(DEFAULT_PROJECT_ROOT)
+    except ValueError as exc:
+        raise ValueError(
+            f"Access denied: path is outside project root: {candidate}"
+        ) from exc
+
+    return candidate
+
+
+def _resolve_safe_docs_path(file_path: str | Path) -> Path:
+    """
+    Resolve a path and ensure it stays within DOCS_PATH.
+    Useful for generated RAG/source documents.
+    """
+    docs_root = _ensure_docs_path()
+    candidate = Path(file_path).expanduser()
+
+    if not candidate.is_absolute():
+        candidate = (docs_root / candidate).resolve()
+    else:
+        candidate = candidate.resolve()
+
+    try:
+        candidate.relative_to(docs_root)
+    except ValueError as exc:
+        raise ValueError(
+            f"Access denied: path is outside docs directory: {candidate}"
+        ) from exc
+
+    return candidate
 
 
 def _safe_filename(text: str, max_length: int = 60) -> str:
@@ -209,6 +249,23 @@ def _invalidate_project_index() -> None:
     _indexed_project_file_count = 0
 
 
+def _invalidate_indexes_for_path(path: Path) -> None:
+    """
+    Invalidate only the indexes affected by a changed file.
+    """
+    try:
+        path.relative_to(DOCS_PATH)
+        _invalidate_doc_index()
+    except ValueError:
+        pass
+
+    try:
+        path.relative_to(DEFAULT_PROJECT_ROOT)
+        _invalidate_project_index()
+    except ValueError:
+        pass
+
+
 def _build_docs_vectorstore():
     """Build a FAISS vectorstore from all .txt files in DOCS_PATH."""
     docs_path = _ensure_docs_path()
@@ -305,27 +362,6 @@ def fetch_summarize_and_save(url: str) -> str:
         return f"Error fetching webpage: {exc}"
     except Exception as exc:
         return f"Error processing webpage: {exc}"
-
-
-@tool(args_schema=CalculateInput)
-def calculate(expression: str) -> str:
-    """Evaluate a mathematical expression and return the result."""
-    allowed_names = {
-        "abs": abs,
-        "round": round,
-        "min": min,
-        "max": max,
-        "sqrt": math.sqrt,
-        "pow": pow,
-        "pi": math.pi,
-        "e": math.e,
-    }
-
-    try:
-        result = eval(expression, {"__builtins__": {}}, allowed_names)
-        return f"{expression} = {result}"
-    except Exception as exc:
-        return f"Error evaluating '{expression}': {exc}"
 
 
 @tool
@@ -466,20 +502,11 @@ def search_codebase(query: str) -> str:
         return f"Error searching codebase: {exc}"
 
 
-def get_web_search_tool():
-    """Create HTTP request tools for fetching URLs."""
-    toolkit = RequestsToolkit(
-        requests_wrapper=TextRequestsWrapper(headers={}),
-        allow_dangerous_requests=True,
-    )
-    return toolkit.get_tools()
-
-
 @tool(args_schema=ReadFileInput)
 def read_file(file_path: str) -> str:
-    """Read a text file from disk and return its contents."""
+    """Read a text file from within the project root."""
     try:
-        path = Path(file_path).expanduser().resolve()
+        path = _resolve_safe_project_path(file_path)
 
         if not path.exists():
             return f"Error: File does not exist: {path}"
@@ -497,14 +524,13 @@ def read_file(file_path: str) -> str:
 
 @tool(args_schema=WriteFileInput)
 def write_file(file_path: str, content: str) -> str:
-    """Write full content to a file, replacing existing content or creating the file."""
+    """Write full content to a file within the project root."""
     try:
-        path = Path(file_path).expanduser().resolve()
+        path = _resolve_safe_project_path(file_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
 
-        _invalidate_project_index()
-        _invalidate_doc_index()
+        _invalidate_indexes_for_path(path)
 
         return f"Wrote file: {path}"
 
@@ -512,32 +538,55 @@ def write_file(file_path: str, content: str) -> str:
         return f"Error writing file: {exc}"
 
 
-@tool(args_schema=ReplaceTextInput)
-def replace_in_file(file_path: str, old_text: str, new_text: str) -> str:
-    """Replace exact text inside a file."""
+@tool
+def save_rag_document(filename: str, content: str) -> str:
+    """
+    Save a generated RAG document under DOCS_PATH.
+    Only .txt files are allowed.
+    """
     try:
-        path = Path(file_path).expanduser().resolve()
+        if not filename.endswith(".txt"):
+            return "Error: RAG documents must use the .txt extension."
 
-        if not path.exists():
-            return f"Error: File does not exist: {path}"
+        path = _resolve_safe_docs_path(filename)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
 
-        if not path.is_file():
-            return f"Error: Not a file: {path}"
-
-        text = path.read_text(encoding="utf-8")
-
-        if old_text not in text:
-            return "Error: old_text was not found in the file."
-
-        updated_text = text.replace(old_text, new_text, 1)
-        path.write_text(updated_text, encoding="utf-8")
-
-        _invalidate_project_index()
         _invalidate_doc_index()
 
-        return f"Updated file: {path}"
+        return f"Saved RAG document: {path}"
 
-    except UnicodeDecodeError:
-        return "Error: File is not valid UTF-8 text."
     except Exception as exc:
-        return f"Error replacing text in file: {exc}"
+        return f"Error saving RAG document: {exc}"
+
+
+@tool(args_schema=FindFilesInput)
+def find_files(filename_query: str, root_dir: str | None = None) -> str:
+    """Find files by partial filename match under the project root."""
+    try:
+        root = _resolve_project_root(root_dir)
+
+        if not root.exists():
+            return f"Error: Directory does not exist: {root}"
+
+        if not root.is_dir():
+            return f"Error: Not a directory: {root}"
+
+        query = filename_query.lower().strip()
+        if not query:
+            return "Error: filename_query cannot be empty."
+
+        matches = []
+        for file_path in _iter_project_files(root):
+            rel = str(file_path.relative_to(root))
+            if query in file_path.name.lower() or query in rel.lower():
+                matches.append(rel)
+
+        if not matches:
+            return f"No files found matching '{filename_query}' under {root}"
+
+        matches = sorted(matches)
+        return "\n".join(matches[:MAX_FILE_LIST])
+
+    except Exception as exc:
+        return f"Error finding files: {exc}"

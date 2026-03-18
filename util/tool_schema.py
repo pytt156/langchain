@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class FetchSummarizeAndSaveInput(BaseModel):
@@ -7,9 +7,13 @@ class FetchSummarizeAndSaveInput(BaseModel):
     )
 
 
-class CalculateInput(BaseModel):
-    expression: str = Field(
-        description="A mathematical expression to evaluate, such as '(5 + 3) * 2' or 'sqrt(16)'."
+class FindFilesInput(BaseModel):
+    filename_query: str = Field(
+        description="Partial or exact filename to search for, for example 'models.py' or 'tools'."
+    )
+    root_dir: str | None = Field(
+        default=None,
+        description="Project root directory to search in. If omitted, the default project root is used.",
     )
 
 
@@ -41,22 +45,25 @@ class SearchCodebaseInput(BaseModel):
 
 class ReadFileInput(BaseModel):
     file_path: str = Field(
-        description="Absolute or project-relative path to a text/code file to read."
+        default="",
+        description="Path to the file to read. Use file_path as the argument name.",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def accept_path_alias(cls, values):
+        if "path" in values and not values.get("file_path"):
+            values["file_path"] = values.pop("path")
+        return values
 
 
 class WriteFileInput(BaseModel):
-    file_path: str = Field(
-        description="Absolute or project-relative path to the file to write."
-    )
-    content: str = Field(
-        description="Full file content to write. This replaces existing content or creates a new file."
-    )
+    file_path: str = Field(default="", description="Path to the file to write.")
+    content: str = Field(description="Full file content to write.")
 
-
-class ReplaceTextInput(BaseModel):
-    file_path: str = Field(
-        description="Absolute or project-relative path to the file to update."
-    )
-    old_text: str = Field(description="Exact text to find in the file.")
-    new_text: str = Field(description="Replacement text to insert instead of old_text.")
+    @model_validator(mode="before")
+    @classmethod
+    def accept_path_alias(cls, values):
+        if "path" in values and not values.get("file_path"):
+            values["file_path"] = values.pop("path")
+        return values
