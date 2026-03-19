@@ -1,0 +1,27 @@
+TITLE: GenAI interaktion
+
+Generativ AI (LLM:er) skiljer sig från traditionell sökning (t.ex. Google) genom att generera svar istället för att hämta dokument.
+
+Kärnprinciper:
+- Modellen producerar sannolika svar, inte verifierad sanning
+- Hallucinationer kan uppstå
+- Output måste alltid verifieras
+
+Prompting:
+- Tydliga instruktioner → bättre output
+- Kontext påverkar kvaliteten direkt
+- Iteration är nödvändig
+
+Bra prompting:
+- Specificera roll ("du är en expert inom...")
+- Specificera format (lista, steg, kod)
+- Begränsa scope
+
+Risker:
+- Bias i träningsdata
+- Felaktiga fakta
+- Övertro på AI-output
+
+Ansvar:
+- Människan ansvarar för beslut
+- AI är ett verktyg, inte en auktoritet

@@ -1,0 +1,27 @@
+TITLE: Verktyg och RAG
+
+Verktyg:
+- Gör att LLM kan interagera med verkligheten
+- Exempel: API:er, databaser, kodexekvering
+
+RAG (Retrieval Augmented Generation):
+1. Sök relevant information
+2. Lägg in i prompt
+3. Generera svar baserat på den
+
+Fördelar:
+- Bättre faktakvalitet
+- Mindre hallucinationer
+- Uppdaterad information
+
+Vektordatabaser:
+- Lagrar embeddings
+- Möjliggör semantisk sökning
+
+Risker:
+- Felaktig retrieval
+- Prompt injection via dokument
+- Övertillit på resultat
+
+Princip:
+- Tool output = osäker input

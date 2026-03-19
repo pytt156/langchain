@@ -1,0 +1,30 @@
+TITLE: Multi-agent-arkitektur
+
+Multi-agent-system:
+- Flera specialiserade agenter
+- Varje agent har tydligt ansvar
+
+Fördelar:
+- Bättre kvalitet
+- Ökad kontroll
+- Skalbarhet
+
+Struktur:
+- Orkestrator (styr)
+- Specialist-agenter
+- Kommunikationslager
+
+Designprinciper:
+- Tydliga roller
+- Spårbarhet
+- Kontrollerade överlämningar
+
+Risker:
+- Kommunikationsfel
+- Komplexitet
+- Svårt att debugga
+
+Lösning:
+- Logging
+- Standardiserade format
+- Begränsade ansvar

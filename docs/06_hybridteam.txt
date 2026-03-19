@@ -1,0 +1,29 @@
+TITLE: Hybridteam (människa + AI)
+
+Hybridteam:
+- Kombination av människor och AI-agenter
+
+AI gör:
+- Skalning
+- Automatisering
+- Dataanalys
+
+Människan gör:
+- Beslut
+- Bedömning
+- Ansvar
+
+Nyckelprincip:
+- AI förstärker, ersätter inte
+
+Organisation:
+- Processer måste designas för AI
+- Tydliga roller och ansvar
+
+Risker:
+- Överautomation
+- Felaktiga beslut
+- Brist på kontroll
+
+Framgångsfaktor:
+- Styrning + processdesign

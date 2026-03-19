@@ -23,6 +23,7 @@ from util.tool_config import (
     EXCLUDED_FILE_NAMES,
 )
 from util.embeddings import get_embeddings
+from util.models import get_model
 from util.tool_schema import (
     FetchSummarizeAndSaveInput,
     IndexProjectInput,
@@ -105,10 +106,15 @@ def _safe_filename(text: str, max_length: int = 60) -> str:
 
 
 def _extract_webpage_notes(html: str, url: str) -> str | None:
-    """Extract title, headings, and paragraphs from HTML and format as notes."""
+    """Extract structured raw notes from modern docs-style HTML pages."""
     soup = BeautifulSoup(html, "html.parser")
 
-    for tag in soup(["script", "style", "noscript"]):
+    for tag in soup(["script", "style", "noscript", "svg"]):
+        tag.decompose()
+
+    content_root = soup.find("main") or soup.find("article") or soup.body or soup
+
+    for tag in content_root.find_all(["nav", "footer", "aside", "form"]):
         tag.decompose()
 
     title = (
@@ -116,18 +122,34 @@ def _extract_webpage_notes(html: str, url: str) -> str | None:
     )
 
     headings: list[str] = []
-    for tag in soup.find_all(["h1", "h2", "h3"]):
+    for tag in content_root.find_all(["h1", "h2", "h3"]):
         text = tag.get_text(" ", strip=True)
         if text:
             headings.append(text)
 
-    paragraphs: list[str] = []
-    for tag in soup.find_all("p"):
-        text = tag.get_text(" ", strip=True)
-        if text and len(text) > 40:
-            paragraphs.append(text)
+    body_sections: list[str] = []
+    seen: set[str] = set()
 
-    if not headings and not paragraphs:
+    for tag in content_root.find_all(["p", "li", "pre"]):
+        text = tag.get_text("\n" if tag.name == "pre" else " ", strip=True)
+
+        if not text or len(text) < 35:
+            continue
+
+        text = " ".join(text.split()) if tag.name != "pre" else text.strip()
+
+        if text in seen:
+            continue
+        seen.add(text)
+
+        if tag.name == "li":
+            body_sections.append(f"- {text}")
+        elif tag.name == "pre":
+            body_sections.append("Code example:\n" + text)
+        else:
+            body_sections.append(text)
+
+    if not headings and not body_sections:
         return None
 
     notes_parts = [
@@ -142,13 +164,58 @@ def _extract_webpage_notes(html: str, url: str) -> str | None:
     else:
         notes_parts.append("- No headings found")
 
-    notes_parts.extend(["", "Summary notes:"])
-    if paragraphs:
-        notes_parts.extend(paragraphs[:MAX_PARAGRAPHS])
+    notes_parts.extend(["", "Extracted content:"])
+    if body_sections:
+        notes_parts.extend(body_sections[:MAX_PARAGRAPHS])
     else:
-        notes_parts.append("No paragraph text found")
+        notes_parts.append("No body text found")
 
     return "\n".join(notes_parts).strip()
+
+
+def _summarize_extracted_notes(raw_notes: str) -> str:
+    """Use the model to turn extracted webpage text into structured notes."""
+    model = get_model(temperature=0.1)
+
+    max_input_chars = 12000
+    trimmed_notes = raw_notes[:max_input_chars]
+
+    prompt = f"""
+Du ska skriva en kort men innehållsrik sammanfattning av en dokumentationssida.
+
+Regler:
+- Skriv på svenska.
+- Använd endast informationen i underlaget.
+- Hitta inte på fakta.
+- Fokusera på kärninnehåll, inte bara rubriker.
+- Förklara centrala begrepp och hur de hänger ihop.
+- Om sidan jämför saker, förklara skillnaderna tydligt.
+- Ta med konkreta exempel om de faktiskt finns i underlaget.
+- Undvik fluff, upprepning och lösryckta rubriklistor.
+- Om underlaget är tunt eller ofullständigt, säg det tydligt.
+
+Format:
+Title: ...
+URL: ...
+
+Sammanfattning:
+2–4 korta stycken med sammanhängande text
+
+Nyckelpunkter:
+- punkt
+- punkt
+- punkt
+
+Underlag:
+{trimmed_notes}
+""".strip()
+
+    response = model.invoke(prompt)
+
+    if hasattr(response, "content"):
+        return response.content.strip()
+
+    return str(response).strip()
 
 
 def _is_allowed_text_file(path: Path) -> bool:
@@ -250,9 +317,7 @@ def _invalidate_project_index() -> None:
 
 
 def _invalidate_indexes_for_path(path: Path) -> None:
-    """
-    Invalidate only the indexes affected by a changed file.
-    """
+    """Invalidate only the indexes affected by a changed file."""
     try:
         path.relative_to(DOCS_PATH)
         _invalidate_doc_index()
@@ -267,14 +332,19 @@ def _invalidate_indexes_for_path(path: Path) -> None:
 
 
 def _build_docs_vectorstore():
-    """Build a FAISS vectorstore from all .txt files in DOCS_PATH."""
+    """Build a FAISS vectorstore from supported docs files in DOCS_PATH and subfolders."""
     docs_path = _ensure_docs_path()
     documents: list[Document] = []
 
-    for file_path in docs_path.glob("*.txt"):
+    for file_path in docs_path.rglob("*"):
+        if not _is_allowed_text_file(file_path):
+            continue
+
         try:
             text = file_path.read_text(encoding="utf-8").strip()
         except UnicodeDecodeError:
+            continue
+        except Exception:
             continue
 
         if not text:
@@ -328,10 +398,8 @@ def _build_project_vectorstore(root_dir: Path):
 
 @tool(args_schema=FetchSummarizeAndSaveInput)
 def fetch_summarize_and_save(url: str) -> str:
-    """Fetch a webpage, extract key text, and save short notes as a .txt file in /docs."""
+    """Fetch a webpage, extract its content, summarize it, and save the summary as a .txt file in /docs."""
     try:
-        docs_path = _ensure_docs_path()
-
         response = requests.get(
             url,
             timeout=15,
@@ -339,9 +407,11 @@ def fetch_summarize_and_save(url: str) -> str:
         )
         response.raise_for_status()
 
-        notes_text = _extract_webpage_notes(response.text, url)
-        if not notes_text:
+        raw_notes = _extract_webpage_notes(response.text, url)
+        if not raw_notes:
             return "Error: No useful content found on the webpage."
+
+        summarized_notes = _summarize_extracted_notes(raw_notes)
 
         soup = BeautifulSoup(response.text, "html.parser")
         title = (
@@ -351,8 +421,9 @@ def fetch_summarize_and_save(url: str) -> str:
         )
         safe_name = _safe_filename(title)
 
-        file_path = docs_path / f"{safe_name}.txt"
-        file_path.write_text(notes_text, encoding="utf-8")
+        file_path = _resolve_safe_docs_path(f"{safe_name}.txt")
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(summarized_notes, encoding="utf-8")
 
         _invalidate_doc_index()
 
@@ -378,7 +449,7 @@ def search_documents(query: str) -> str:
         vectorstore = _get_docs_vectorstore()
 
         if vectorstore is None:
-            return "No indexed documents found. Add .txt files to the docs directory first."
+            return "No indexed documents found. Add supported files to the docs directory first."
 
         results = vectorstore.similarity_search(query, k=MAX_SEARCH_RESULTS)
 

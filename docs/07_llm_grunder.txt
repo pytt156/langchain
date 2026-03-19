@@ -1,0 +1,31 @@
+TITLE: LLM grunder
+
+En LLM:
+- Ett neuralt nätverk som förutsäger nästa token
+
+Viktigt:
+- Inte en databas
+- Inte ett söksystem
+- Ingen förståelse
+
+Träning:
+- Stora textdataset (internet)
+- Lär sig statistiska mönster
+
+Tokenisering:
+- Text → tokens → siffror
+
+Transformer:
+- Self-attention
+- Förstår relationer i text
+
+Inference:
+- Genererar text token för token
+
+Begränsningar:
+- Hallucinationer
+- Bias
+- Ingen verifiering
+
+Konsekvens:
+- Output måste granskas

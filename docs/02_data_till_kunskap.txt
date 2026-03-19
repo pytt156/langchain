@@ -1,0 +1,26 @@
+TITLE: Från data till kunskap
+
+Data → Information → Kunskap
+
+Data:
+- Råa fakta utan kontext
+
+Information:
+- Strukturerad data
+
+Kunskap:
+- Kontextualiserad information som kan användas för beslut
+
+GenAI:s roll:
+- Omvandlar stora datamängder till sammanfattningar
+- Hjälper till att identifiera mönster
+- Kan skapa beslutsunderlag
+
+Begränsningar:
+- Saknar verklig förståelse
+- Kräver mänsklig tolkning
+- Risk för felaktiga slutsatser
+
+Viktigt:
+- Verifiera alltid output
+- Använd AI som stöd, inte ersättning

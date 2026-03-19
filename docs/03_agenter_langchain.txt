@@ -1,0 +1,32 @@
+TITLE: AI-agenter och LangChain
+
+En AI-agent:
+- Tar emot ett mål
+- Planerar steg
+- Använder verktyg
+- Itererar tills målet uppnås
+
+Skillnad mot vanlig LLM:
+- LLM: svarar på frågor
+- Agent: agerar och löser uppgifter
+
+Komponenter:
+- Modell (LLM)
+- Verktyg (tools/API:er)
+- Minne
+- Kontrollflöde (loop)
+
+LangChain:
+- Ramverk för att bygga agenter
+- Hanterar tool calling
+- Hanterar promptstruktur
+
+Risker:
+- Felaktiga tool-anrop
+- Prompt injection
+- Överautomation
+
+Guardrails:
+- Begränsa vad agenten får göra
+- Validera input/output
+- Logga och övervaka
